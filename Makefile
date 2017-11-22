@@ -1,3 +1,3 @@
 all:
-	go run -v src/create_filters.go
+	go run -v create_filters.go
 
