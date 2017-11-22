@@ -118,8 +118,7 @@ func main() {
 	server := callbackServer(codeChan)
 	go server.ListenAndServe()
 
-	// If modifying these scopes, delete your previously saved credentials
-	// at ~/.credentials/gmail-go-quickstart.json
+	// If modifying these scopes, delete your previously saved credentials at ~/.credentials/gmail-go-quickstart.json
 	config, err := google.ConfigFromJSON(b, gmail.GmailReadonlyScope, gmail.GmailLabelsScope, gmail.GmailSettingsBasicScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config, err=%s", err)
