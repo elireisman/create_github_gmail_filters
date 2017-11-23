@@ -1,9 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -18,25 +20,51 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
+// this server will receive the OAuth callback and extract the code we need to hit the Gmail API
 func callbackServer(out chan string) *http.Server {
-	server := &http.Server{
+	return &http.Server{
 		Addr:           ":9292",
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := r.ParseForm(); err != nil {
+				log.Fatalf("Failed to parse incoming params from auth server, err=%s", err)
+			}
+			out <- r.FormValue("code")
+
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+			io.WriteString(w, "<body><h2>Success!</h2><h3>Auth completed, check your console window for status during Gmail API calls</h2></body>")
+		}),
 	}
-	server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			log.Fatalf("Failed to parse incoming params from auth server, err=%s", err)
+}
+
+func getWatchedGHRepos() []string {
+	out := []string{}
+	user := os.Getenv("USER")
+	endpt := "https://api.github.com/users/" + user  + "/subscriptions"
+	resp, err := http.Get(endpt)
+	if err != nil {
+		log.Fatalf("Failed to read watchlist from github.com for user %q", user)
+	}
+	subs := []map[string]interface{}{}
+	bytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Failed to read watches list from %q, err=%s", endpt, err)
+	}
+	if err := json.Unmarshal(bytes, &subs); err != nil {
+		log.Fatalf("Failed to unmarshal watches list, err=%s", err)
+	}
+
+	for _, repo := range subs {
+		if fullName, ok := repo["full_name"]; ok {
+			if strings.HasPrefix(fullName.(string), "github/") {
+				out = append(out, repo["name"].(string))
+			}
 		}
-		out <- r.FormValue("code")
-
-		w.WriteHeader(http.StatusOK)
-		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
-		io.WriteString(w, "<body><h2>Success!</h2><h3>Auth completed, check your console window for status during Gmail API calls</h2></body>")
-	})
-
-	return server
+	}
+	return out
 }
 
 func getLocalGHRepos() []string {
@@ -69,12 +97,20 @@ func createLabel(svc *gmail.UsersLabelsService, labelName string) (*gmail.Label,
 
 	// if the label already exists, don't blow up (repeated runs should be idempotent anyway)
 	if err != nil {
-		gerr := err.(*googleapi.Error)
-		if gerr.Code == http.StatusConflict {
-			log.Printf("Label already exists: %s ", gerr.Message)
-			err = nil
+		switch err.(type) {
+		case *googleapi.Error:
+			gerr := err.(*googleapi.Error)
+			if gerr.Code == http.StatusConflict {
+				log.Printf("Label already exists: %s ", gerr.Message)
+				err = nil
+			}
+
+		//case *url.Error:
+		default:
+			log.Printf("%#v", err)
 		}
 	}
+
 	return resp, err
 }
 
@@ -107,13 +143,14 @@ func createFilter(svc *gmail.UsersSettingsFiltersService, label *gmail.Label, re
 }
 
 func main() {
-	ctx := context.Background()
+	localFlag := flag.Bool("local", false, "Build repo list from local checkouts instead of GitHub subscriptions")
 
 	b, err := ioutil.ReadFile("client_secret.json")
 	if err != nil {
 		log.Fatalf("Unable to read client secret file, err=%s", err)
 	}
 
+	ctx := context.Background()
 	codeChan := make(chan string)
 	server := callbackServer(codeChan)
 	go server.ListenAndServe()
@@ -130,16 +167,22 @@ func main() {
 		log.Fatalf("Unable to retrieve gmail Client, err=%s", err)
 	}
 
+	var targets []string
+	switch *localFlag {
+	case true: targets = getLocalGHRepos()
+	default:   targets = getWatchedGHRepos()
+	}
+
 	labelSvc := srv.Users.Labels
 	filterSvc := srv.Users.Settings.Filters
-	for _, repo := range getLocalGHRepos() {
+	for _, repo := range targets {
 		// create a label for each repo name
 		labelName := "github/" + repo
 		labelResp, err := createLabel(labelSvc, labelName)
+		if labelResp != nil {
+			log.Printf("Response: %#v", *labelResp)
+		}
 		if err != nil {
-			if labelResp != nil {
-				log.Printf("Response: %v", *labelResp)
-			}
 			log.Fatalf("Failed to create label '%s', err=%s", labelName, err)
 		}
 
@@ -155,5 +198,6 @@ func main() {
 		}
 	}
 
+	log.Printf("\n")
 	log.Printf("Run complete, thanks for playing - now go check your email!")
 }

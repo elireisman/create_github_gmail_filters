@@ -1,7 +1,7 @@
 ### GitHub Gmail Labels & Filters Generator
 
 #### Purpose
-Uses Google Gmail API to create labels and Inbox filters for each repo you have checked out at `~/gihtub` on your laptop. Labels all incoming mail notifications from each repo into its own email label. Labels with unread mail will appear in the Gmail sidebar.
+Uses Google Gmail API to create labels and Inbox filters for each `github.com/github/...` repo you receive notifications from. By default, labels and filters are created for every Github org` repo you are currently watching or getting notifications from. If the `-local=true` arg is supplied, the labels and filters are generated for each repo you have checked out at `~/gihtub` on your local machine. The script buckets all incoming mail notifications from each repo into its own email label. Labels with unread mail will appear prominently (with an unread count) in the left-hand Gmail menu panel.
 
 #### Usage
 Clone the repo, `cd` into it, and run `make`. The script is idempotent and can be rerun anytime if you've checked out more repos since last run. The first run, the script will require you to drop a link into your browser for OAuth, and will prompt you for a code when auth is complete which will be cached locally until expiration.
