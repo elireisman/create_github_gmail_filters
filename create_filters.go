@@ -144,6 +144,7 @@ func createFilter(svc *gmail.UsersSettingsFiltersService, label *gmail.Label, re
 
 func main() {
 	localFlag := flag.Bool("local", false, "Build repo list from local checkouts instead of GitHub subscriptions")
+        flag.Parse()
 
 	b, err := ioutil.ReadFile("client_secret.json")
 	if err != nil {
