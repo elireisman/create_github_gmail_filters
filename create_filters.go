@@ -43,8 +43,9 @@ func callbackServer(out chan string) *http.Server {
 func getWatchedGHRepos() []string {
 	out := []string{}
 	user := os.Getenv("USER")
-	endpt := "https://api.github.com/users/" + user  + "/subscriptions"
-	resp, err := http.Get(endpt)
+        endpt := "https://api.github.com/users/" + user  + "/subscriptions"
+        // TODO: ^^^ need to authorize to use /user/subscriptions endpoint for all repos (see go-github lib, etc.)
+        resp, err := http.Get(endpt)
 	if err != nil {
 		log.Fatalf("Failed to read watchlist from github.com for user %q", user)
 	}
@@ -180,11 +181,11 @@ func main() {
 		// create a label for each repo name
 		labelName := "github/" + repo
 		labelResp, err := createLabel(labelSvc, labelName)
-		if labelResp != nil {
-			log.Printf("Response: %#v", *labelResp)
-		}
 		if err != nil {
-			log.Fatalf("Failed to create label '%s', err=%s", labelName, err)
+                    if labelResp != nil {
+                            log.Printf("Response: %#v", *labelResp)
+                    }
+                    log.Fatalf("Failed to create label '%s', err=%s", labelName, err)
 		}
 
 		// inlcude response from label-create as it's a *Label populated with metadata

@@ -18,8 +18,15 @@ To obtain API credentials, you'll need to visit Google's [Console Developers pag
 Afterwards, download the secrets file from the Google Credentials page as JSON, and place this file in the root directory of this repo, renaming it to `client_secret.json`. When the `client_secret.json` file is in place, run one of the following:
     * `make` will create a Gmail label + routing filter for each Github-org repo in you're subscribed to for notifications
     * `make local` will create a Gmail label + routing filter for each Github-org repo you have checked out locally at `~/github`
+    * `make clean` clears old auth token; useful if the script fails with expired auth token errors
+If your local machine prompts you to allow `create_filters` app to accept connections, _be sure to click_ `Allow`. When you are prompted with a long URL, copy and paste it into your web browser. Upom browsing this URL, the app will receive it's authorization tokens (which are cached locally for easy rerun of the script) and begin creating the labels and filters.
 
-If your local machine prompts you to allow `create_filters` app to accept connections, _be sure to click_ `Allow`. When you are prompted with a long URL, copy and paste it into your web browser. Upom browsing this URL, the app will receive it's authorization tokens (which are cached locally for easy rerun of the script) and begin creating the labels and filters. For each repo `foo` found under `$HOME/github` on your local machine, the script will creat a new `github/foo` label for each, along with a matching Gmail Filter to route all repo notifications for `github/foo` into its new labeled bucket. If the script fails saying your token is expired, rerun the script after running: `rm -rf ~/.credentials` to clear it. After, you will be re-prompted for auth, and can log into a different Google account if desired.
+If the script fails saying your token is expired, rerun the script after running: `make clean` to clear it. After, you will be re-prompted for auth, and can log into a different Google account if desired.
 
-That's it, you've reclaimed your Inbox. Huzzah!
+
+### TODOs
+    * add OAuth2 lib for GitHub repo subscriptions-for-user API calls
+    * get new filters to retroactively scan and re-label older emails at filter creation time, as you can in the Gmail Settings -> Filters menus
+    * paramterize more things
+    * HTTPS for Gmail OAuth2 callback server
 
