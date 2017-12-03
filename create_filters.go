@@ -28,7 +28,7 @@ func callbackServer(out chan string) *http.Server {
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
-		TLSConfig:      &tls.Config{InsecureSkipVerify: true}, //getTLSConfig(),
+		//TLSConfig:      getTLSConfig(),
 		Handler:        getHandlerFunc(out),
 	}
 }
@@ -175,8 +175,8 @@ func main() {
 	ctx := context.Background()
 	codeChan := make(chan string)
 	server := callbackServer(codeChan)
-	go log.Fatal(server.ListenAndServeTLS("server.crt", "server.key"))
-	//go server.ListenAndServe()
+	//go log.Fatal(server.ListenAndServeTLS("server.crt", "server.key"))
+	go server.ListenAndServe()
 
 	// If modifying these scopes, delete your previously saved credentials at ~/.credentials/gmail-go-quickstart.json
 	config, err := google.ConfigFromJSON(b, gmail.GmailReadonlyScope, gmail.GmailLabelsScope, gmail.GmailSettingsBasicScope)
