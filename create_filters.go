@@ -1,11 +1,12 @@
 package main
 
 import (
+	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -27,25 +28,44 @@ func callbackServer(out chan string) *http.Server {
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := r.ParseForm(); err != nil {
-				log.Fatalf("Failed to parse incoming params from auth server, err=%s", err)
-			}
-			out <- r.FormValue("code")
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true}, //getTLSConfig(),
+		Handler:        getHandlerFunc(out),
+	}
+}
 
-			w.WriteHeader(http.StatusOK)
-			w.Header().Set("Content-Type", "text/html; charset=UTF-8")
-			io.WriteString(w, "<body><h2>Success!</h2><h3>Auth completed, check your console window for status during Gmail API calls</h2></body>")
-		}),
+func getHandlerFunc(out chan string) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			log.Fatalf("Failed to parse incoming params from auth server, err=%s", err)
+		}
+		out <- r.FormValue("code")
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		io.WriteString(w, "<body><h2>Success!</h2><h3>Auth completed, check your console window for status during Gmail API calls</h2></body>")
+	})
+}
+
+func getTLSConfig() *tls.Config {
+	return &tls.Config{
+		MinVersion:               tls.VersionTLS12,
+		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		},
 	}
 }
 
 func getWatchedGHRepos() []string {
 	out := []string{}
 	user := os.Getenv("USER")
-        endpt := "https://api.github.com/users/" + user  + "/subscriptions"
-        // TODO: ^^^ need to authorize to use /user/subscriptions endpoint for all repos (see go-github lib, etc.)
-        resp, err := http.Get(endpt)
+	endpt := "https://api.github.com/users/" + user + "/subscriptions"
+	// TODO: ^^^ need to authorize to use /user/subscriptions endpoint for all repos (see go-github lib, etc.)
+	resp, err := http.Get(endpt)
 	if err != nil {
 		log.Fatalf("Failed to read watchlist from github.com for user %q", user)
 	}
@@ -145,7 +165,7 @@ func createFilter(svc *gmail.UsersSettingsFiltersService, label *gmail.Label, re
 
 func main() {
 	localFlag := flag.Bool("local", false, "Build repo list from local checkouts instead of GitHub subscriptions")
-        flag.Parse()
+	flag.Parse()
 
 	b, err := ioutil.ReadFile("client_secret.json")
 	if err != nil {
@@ -155,7 +175,8 @@ func main() {
 	ctx := context.Background()
 	codeChan := make(chan string)
 	server := callbackServer(codeChan)
-	go server.ListenAndServe()
+	go log.Fatal(server.ListenAndServeTLS("server.crt", "server.key"))
+	//go server.ListenAndServe()
 
 	// If modifying these scopes, delete your previously saved credentials at ~/.credentials/gmail-go-quickstart.json
 	config, err := google.ConfigFromJSON(b, gmail.GmailReadonlyScope, gmail.GmailLabelsScope, gmail.GmailSettingsBasicScope)
@@ -171,8 +192,10 @@ func main() {
 
 	var targets []string
 	switch *localFlag {
-	case true: targets = getLocalGHRepos()
-	default:   targets = getWatchedGHRepos()
+	case true:
+		targets = getLocalGHRepos()
+	default:
+		targets = getWatchedGHRepos()
 	}
 
 	labelSvc := srv.Users.Labels
@@ -182,10 +205,10 @@ func main() {
 		labelName := "github/" + repo
 		labelResp, err := createLabel(labelSvc, labelName)
 		if err != nil {
-                    if labelResp != nil {
-                            log.Printf("Response: %#v", *labelResp)
-                    }
-                    log.Fatalf("Failed to create label '%s', err=%s", labelName, err)
+			if labelResp != nil {
+				log.Printf("Response: %#v", *labelResp)
+			}
+			log.Fatalf("Failed to create label '%s', err=%s", labelName, err)
 		}
 
 		// inlcude response from label-create as it's a *Label populated with metadata

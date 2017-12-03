@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 
@@ -32,7 +33,10 @@ func GetClient(ctx context.Context, config *oauth2.Config, out chan string) *htt
 // It returns the retrieved Token.
 func getTokenFromWeb(ctx context.Context, config *oauth2.Config, out chan string) *oauth2.Token {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	log.Printf("Go to the following link in your browser to authorize the API calls: \n%v\n", authURL)
+	//log.Printf("Go to the following link in your browser to authorize the API calls: \n%v\n", authURL)
+	if err := exec.Command("open", "-a", "Google Chrome", authURL).Run(); err != nil {
+		log.Fatalf("Failed to open auth URL in Chrome browser, err=%s", err)
+	}
 
 	// wait for OAuth to hit us back at localhost, pull the "code" param out to obtain our token
 	code := <-out
